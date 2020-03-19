@@ -192,8 +192,8 @@ impl SSHState {
                             //we may have consumed data from previous records
                             if input.len() < SSH_RECORD_HEADER_LEN {
                                 return AppLayerResult::incomplete(
-                                    (input.len() - il) as u32,
-                                    (SSH_RECORD_HEADER_LEN - input.len()) as u32,
+                                    (il - input.len()) as u32,
+                                    SSH_RECORD_HEADER_LEN as u32,
                                 );
                             } else {
                                 //TODO BUG_ON ?
@@ -238,9 +238,9 @@ impl SSHState {
                     if input.len() > 0 {
                         //consume everything but last byte which may be CR
                         //and needs at least one more byte for eol
-                        return AppLayerResult::incomplete((input.len() - 1) as u32, 1 as u32);
+                        return AppLayerResult::incomplete((input.len() - 1) as u32, 2 as u32);
                     }
-                    return AppLayerResult::incomplete(0 as u32, 1 as u32);
+                    return AppLayerResult::incomplete(0 as u32, (input.len() + 1) as u32);
                 }
                 Err(e) => {
                     SCLogDebug!("SSH invalid banner {}", e);
@@ -278,7 +278,7 @@ impl SSHState {
             Err(nom::Err::Incomplete(_)) => {
                 if input.len() < SSH_MAX_BANNER_LEN {
                     //0 consumed, needs at least one more byte
-                    return AppLayerResult::incomplete(0 as u32, 1 as u32);
+                    return AppLayerResult::incomplete(0 as u32, (input.len() + 1) as u32);
                 } else {
                     SCLogDebug!(
                         "SSH banner too long {} vs {} and waiting for eol",
