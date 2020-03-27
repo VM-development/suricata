@@ -220,6 +220,8 @@
 #include "detect-ssh-software-version.h"
 #include "detect-ssh-hassh.h"
 #include "detect-ssh-hassh-server.h"
+#include "detect-ssh-hassh-string.h"
+#include "detect-ssh-hassh-server-string.h"
 
 #include "detect-http-stat-code.h"
 #include "detect-ssl-version.h"
@@ -536,6 +538,8 @@ void SigTableSetup(void)
     DetectSshSoftwareVersionRegister();
     DetectSshHasshRegister();
     DetectSshHasshServerRegister();
+    DetectSshHasshStringRegister();
+    DetectSshHasshServerStringRegister();
     DetectSslStateRegister();
     DetectSslVersionRegister();
     DetectByteExtractRegister();

@@ -50,9 +50,9 @@
 
 
 #define KEYWORD_NAME "ssh.hassh"
-#define KEYWORD_NAME_LEGACY "ssh_hassh"
-#define KEYWORD_DOC "ssh-keywords.html#ssh-hassh"
-#define BUFFER_NAME "ssh.hassh"
+#define KEYWORD_NAME_LEGACY "hassh"
+#define KEYWORD_DOC "ssh-keywords.html#hassh"
+#define BUFFER_NAME "hassh"
 #define BUFFER_DESC "Ssh Client Fingerprinting For Ssh Clients "
 static int g_ssh_hassh_buffer_id = 0;
 
@@ -120,7 +120,7 @@ static _Bool DetectSshHasshHashValidateCallback(const Signature *s,
         const DetectContentData *cd = (DetectContentData *)sm->ctx;
 
         if (cd->flags & DETECT_CONTENT_NOCASE) {
-            *sigerror = "ja3.hash should not be used together with "
+            *sigerror = "hassh should not be used together with "
                         "nocase, since the rule is automatically "
                         "lowercased anyway which makes nocase redundant.";
             SCLogWarning(SC_WARN_POOR_RULE, "rule %u: %s", s->id, *sigerror);
@@ -129,7 +129,7 @@ static _Bool DetectSshHasshHashValidateCallback(const Signature *s,
         if (cd->content_len == 32)
             return TRUE;
 
-        *sigerror = "Invalid length of the specified JA3 hash (should "
+        *sigerror = "Invalid length of the specified hassh (should "
                     "be 32 characters long). This rule will therefore "
                     "never match.";
         SCLogWarning(SC_WARN_POOR_RULE,  "rule %u: %s", s->id, *sigerror);

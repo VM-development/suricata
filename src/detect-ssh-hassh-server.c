@@ -49,10 +49,10 @@
 #include "rust.h"
 
 
-#define KEYWORD_NAME "ssh.hasshServer"
-#define KEYWORD_NAME_LEGACY "ssh_hasshServer"
-#define KEYWORD_DOC "ssh-keywords.html#ssh-hasshServer"
-#define BUFFER_NAME "ssh.hasshServer"
+#define KEYWORD_NAME "hasshServer"
+#define KEYWORD_NAME_LEGACY "hasshServer"
+#define KEYWORD_DOC "ssh-keywords.html#hasshServer"
+#define BUFFER_NAME "hasshServer"
 #define BUFFER_DESC "Ssh Client Fingerprinting For Ssh Servers"
 static int g_ssh_hassh_buffer_id = 0;
 
@@ -120,7 +120,7 @@ static _Bool DetectSshHasshServerHashValidateCallback(const Signature *s,
         const DetectContentData *cd = (DetectContentData *)sm->ctx;
 
         if (cd->flags & DETECT_CONTENT_NOCASE) {
-            *sigerror = "ja3.hash should not be used together with "
+            *sigerror = "hasshServer should not be used together with "
                         "nocase, since the rule is automatically "
                         "lowercased anyway which makes nocase redundant.";
             SCLogWarning(SC_WARN_POOR_RULE, "rule %u: %s", s->id, *sigerror);
@@ -129,7 +129,7 @@ static _Bool DetectSshHasshServerHashValidateCallback(const Signature *s,
         if (cd->content_len == 32)
             return TRUE;
 
-        *sigerror = "Invalid length of the specified JA3 hash (should "
+        *sigerror = "Invalid length of the specified hasshServer (should "
                     "be 32 characters long). This rule will therefore "
                     "never match.";
         SCLogWarning(SC_WARN_POOR_RULE,  "rule %u: %s", s->id, *sigerror);
@@ -202,9 +202,8 @@ void DetectSshHasshServerRegister(void)
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].Setup = DetectSshHasshServerSetup;
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].flags |= SIGMATCH_INFO_STICKY_BUFFER | SIGMATCH_NOOPT;
 
-
-    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister, GetSshData, ALPROTO_SSH, SSH_STATE_BANNER_DONE),
-    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_SSH, SIG_FLAG_TOSERVER, SSH_STATE_BANNER_DONE, DetectEngineInspectBufferGeneric, GetSshData);
+    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOCLIENT, 2, PrefilterGenericMpmRegister, GetSshData, ALPROTO_SSH, SSH_STATE_BANNER_DONE),
+    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_SSH, SIG_FLAG_TOCLIENT, SSH_STATE_BANNER_DONE, DetectEngineInspectBufferGeneric, GetSshData);
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 
     g_ssh_hassh_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);

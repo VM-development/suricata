@@ -26,6 +26,7 @@ num = "0.2"
 num-derive = "0.2"
 num-traits = "0.2"
 widestring = "0.4"
+md5 = "0.7.0"
 
 der-parser = "1.1"
 kerberos-parser = "0.2"
