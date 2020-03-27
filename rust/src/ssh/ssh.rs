@@ -154,27 +154,26 @@ impl SSHState {
     			
     			match parser::parse_packet_key_exchange(&input[SSH_RECORD_HEADER_LEN..]) {
     				Ok((_, key_exchange)) => {
-    					if resp {
-    						hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_server_to_client);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_server_to_client);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_server_to_client);
-    					}
-    					else {
-    						hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_client_to_server);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_client_to_server);
-    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-    						hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_client_to_server);
-    					}
-    					
-    					hdr.hassh.extend(format!("{:x?}", compute(&hdr.hassh_string)).as_bytes());
-    				}
+                        if resp {
+                            hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_server_to_client);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_server_to_client);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_server_to_client);
+                        } else {
+                            hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_client_to_server);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_client_to_server);
+                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+                            hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_client_to_server);
+                        }
+                        // hdr.hassh.extend_from_slice(compute(&hdr.hassh_string).0);
+                        hdr.hassh.extend(format!("{:x?}", compute(&hdr.hassh_string)).as_bytes());
+                    }
     				Err(_) => {
     					// self.set_event(SSHEvent::InvalidRecord);
     				}
