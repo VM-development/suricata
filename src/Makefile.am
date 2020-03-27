@@ -254,6 +254,7 @@ detect-ssh-proto.c detect-ssh-proto.h \
 detect-ssh-proto-version.c detect-ssh-proto-version.h \
 detect-ssh-software.c detect-ssh-software.h \
 detect-ssh-software-version.c detect-ssh-software-version.h \
+detect-ssh-hassh.c detect-ssh-hassh.h \ 
 detect-smb-share.c detect-smb-share.h \
 detect-ssl-state.c detect-ssl-state.h \
 detect-ssl-version.c detect-ssl-version.h \

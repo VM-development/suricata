@@ -1,0 +1,218 @@
+/* Copyright (C) 2007-2014 Open Information Security Foundation
+ *
+ * You can copy, redistribute or modify this Program under the terms of
+ * the GNU General Public License version 2 as published by the Free
+ * Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+/**
+ * \file
+ *
+ * \author Vadym Malakhatko <malahatkovadim@gmail.com>
+ */
+
+#include "suricata-common.h"
+#include "threads.h"
+#include "debug.h"
+#include "decode.h"
+
+#include "detect.h"
+#include "detect-parse.h"
+
+#include "detect-engine.h"
+#include "detect-engine-mpm.h"
+#include "detect-engine-state.h"
+#include "detect-engine-prefilter.h"
+
+#include "flow.h"
+#include "flow-var.h"
+#include "flow-util.h"
+
+#include "util-debug.h"
+#include "util-unittest.h"
+#include "util-unittest-helper.h"
+
+#include "app-layer.h"
+#include "app-layer-parser.h"
+#include "app-layer-ssh.h"
+#include "detect-ssh-hassh.h"
+#include "rust.h"
+
+
+#define KEYWORD_NAME "ssh.hassh"
+#define KEYWORD_NAME_LEGACY "ssh_hassh"
+#define KEYWORD_DOC "ssh-keywords.html#ssh-hassh"
+#define BUFFER_NAME "ssh.hassh"
+#define BUFFER_DESC "Ssh Client Fingerprinting"
+static int g_ssh_hassh_buffer_id = 0;
+
+
+static InspectionBuffer *GetSshData(DetectEngineThreadCtx *det_ctx,
+        const DetectEngineTransforms *transforms, Flow *_f,
+        const uint8_t flow_flags, void *txv, const int list_id)
+{
+    
+    SCEnter();
+
+    InspectionBuffer *buffer = InspectionBufferGet(det_ctx, list_id);
+
+    if (buffer->inspect == NULL) {
+        const uint8_t *hassh = NULL;
+        uint32_t b_len = 0;
+
+        if (rs_ssh_tx_get_hassh(txv, &hassh, &b_len, flow_flags) != 1)
+            return NULL;
+        if (hassh == NULL || b_len == 0) {
+            SCLogDebug("SSH hassh not set");
+            return NULL;
+        }
+
+        InspectionBufferSetup(buffer, hassh, b_len);
+        InspectionBufferApplyTransforms(buffer, transforms);
+    }
+
+    return buffer;
+}
+
+static int DetectSshHasshSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
+{
+    if (DetectBufferSetActiveList(s, g_ssh_hassh_buffer_id) < 0)
+        return -1;
+
+    if (DetectSignatureSetAppProto(s, ALPROTO_SSH) < 0)
+        return -1;
+        
+    /* try to enable JA3 */
+    // SSLEnableHassh();
+
+    /* Check if JA3 is disabled */
+    /*if (!RunmodeIsUnittests() && HasshIsDisabled("rule")) {
+        if (!SigMatchSilentErrorEnabled(de_ctx, DETECT_AL_TLS_JA3S_HASH)) {
+            SCLogError(SC_WARN_JA3_DISABLED, "ja3(s) support is not enabled");
+        }
+        return -2;
+    }*/
+
+    return 0;
+
+}
+
+
+static _Bool DetectSshHasshHashValidateCallback(const Signature *s,
+                                              const char **sigerror)
+{
+    const SigMatch *sm = s->init_data->smlists[g_ssh_hassh_buffer_id];
+    for ( ; sm != NULL; sm = sm->next)
+    {
+        if (sm->type != DETECT_CONTENT)
+            continue;
+
+        const DetectContentData *cd = (DetectContentData *)sm->ctx;
+
+        if (cd->flags & DETECT_CONTENT_NOCASE) {
+            *sigerror = "ja3.hash should not be used together with "
+                        "nocase, since the rule is automatically "
+                        "lowercased anyway which makes nocase redundant.";
+            SCLogWarning(SC_WARN_POOR_RULE, "rule %u: %s", s->id, *sigerror);
+        }
+
+        if (cd->content_len == 32)
+            return TRUE;
+
+        *sigerror = "Invalid length of the specified JA3 hash (should "
+                    "be 32 characters long). This rule will therefore "
+                    "never match.";
+        SCLogWarning(SC_WARN_POOR_RULE,  "rule %u: %s", s->id, *sigerror);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static void DetectSshHasshHashSetupCallback(const DetectEngineCtx *de_ctx,
+                                          Signature *s)
+{
+    SigMatch *sm = s->init_data->smlists[g_ssh_hassh_buffer_id];
+    for ( ; sm != NULL; sm = sm->next)
+    {
+        if (sm->type != DETECT_CONTENT)
+            continue;
+
+        DetectContentData *cd = (DetectContentData *)sm->ctx;
+
+        uint32_t u;
+        for (u = 0; u < cd->content_len; u++)
+        {
+            if (isupper(cd->content[u])) {
+                cd->content[u] = tolower(cd->content[u]);
+            }
+        }
+        /*uint8_t new_hassh[cd->content_len / 2];
+        int new_hassh_len = 0;
+
+        for (u = 0; u < cd->content_len; u+=2)
+        {
+        	if (cd->content[u] > '9')
+        		new_hassh[new_hassh_len] = ((tolower((char)cd->content[u]) - 'a') + 10) << 4;
+        	else
+        		new_hassh[new_hassh_len] = ((char)cd->content[u] - '0') << 4;
+
+        	if (cd->content[u + 1] > '9')
+        		new_hassh[new_hassh_len] |= tolower((char)cd->content[u + 1]) - 'a' + 10;
+        	else
+        		new_hassh[new_hassh_len] |= (char)cd->content[u + 1] - '0';
+        	new_hassh_len++;
+        }
+        int i;
+        for (i=0; i<new_hassh_len; i++)
+        {
+        	printf("%02x",(char)new_hassh[i]);
+        }
+        printf("\n");
+*/
+
+        SpmDestroyCtx(cd->spm_ctx);
+        cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1,
+        		de_ctx->spm_global_thread_ctx);
+    }
+}
+
+/**
+ * \brief Registration function for hassh keyword.
+ */
+void DetectSshHasshRegister(void) 
+{
+    sigmatch_table[DETECT_AL_SSH_HASSH].name = KEYWORD_NAME;
+    sigmatch_table[DETECT_AL_SSH_HASSH].alias = KEYWORD_NAME_LEGACY;
+    sigmatch_table[DETECT_AL_SSH_HASSH].desc = BUFFER_NAME " sticky buffer";
+#ifdef UNITTESTS
+    //sigmatch_table[DETECT_AL_SNMP_COMMUNITY].RegisterTests = DetectSshHasshRegisterTests;
+#endif
+    sigmatch_table[DETECT_AL_SSH_HASSH].url = DOC_URL DOC_VERSION "/rules/" KEYWORD_DOC;
+    sigmatch_table[DETECT_AL_SSH_HASSH].Setup = DetectSshHasshSetup;
+    sigmatch_table[DETECT_AL_SSH_HASSH].flags |= SIGMATCH_INFO_STICKY_BUFFER | SIGMATCH_NOOPT;
+
+
+    DetectAppLayerMpmRegister2(BUFFER_NAME, SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister, GetSshData, ALPROTO_SSH, SSH_STATE_BANNER_DONE),
+    DetectAppLayerInspectEngineRegister2(BUFFER_NAME, ALPROTO_SSH, SIG_FLAG_TOSERVER, SSH_STATE_BANNER_DONE, DetectEngineInspectBufferGeneric, GetSshData);
+    DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
+
+    g_ssh_hassh_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);
+
+    // DetectAppLayerInspectEngineRegister2("ja3.hash", ALPROTO_TLS, SIG_FLAG_TOSERVER, 0, DetectEngineInspectBufferGeneric, GetData);
+    // DetectAppLayerMpmRegister2("ja3.hash", SIG_FLAG_TOSERVER, 2, PrefilterGenericMpmRegister, GetData, ALPROTO_TLS, 0);
+    // DetectBufferTypeSetDescriptionByName("ja3.hash", "TLS JA3 hash");
+
+    DetectBufferTypeRegisterSetupCallback(BUFFER_NAME, DetectSshHasshHashSetupCallback);
+    DetectBufferTypeRegisterValidateCallback(BUFFER_NAME, DetectSshHasshHashValidateCallback);
+}

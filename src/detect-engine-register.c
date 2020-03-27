@@ -213,10 +213,13 @@
 #include "detect-tls.h"
 #include "detect-tls-cert-validity.h"
 #include "detect-tls-version.h"
+
 #include "detect-ssh-proto.h"
 #include "detect-ssh-proto-version.h"
 #include "detect-ssh-software.h"
 #include "detect-ssh-software-version.h"
+#include "detect-ssh-hassh.h"
+
 #include "detect-http-stat-code.h"
 #include "detect-ssl-version.h"
 #include "detect-ssl-state.h"
@@ -530,6 +533,8 @@ void SigTableSetup(void)
     DetectSshVersionRegister();
     DetectSshSoftwareRegister();
     DetectSshSoftwareVersionRegister();
+    DetectSshHasshRegister();
+    
     DetectSslStateRegister();
     DetectSslVersionRegister();
     DetectByteExtractRegister();
