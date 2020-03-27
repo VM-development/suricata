@@ -26,6 +26,24 @@ fn is_not_lineend(b: u8) -> bool {
     return true;
 }
 
+#[repr(u8)]
+#[derive(PartialEq, Eq, FromPrimitive, Debug)]
+pub enum MessageCode {
+	SshMsgDisconnect = 1,
+	SshMsgIgnore = 2,
+	SshMsgUnimplemented = 3,
+	SshMsgDebug = 4,
+	SshMsgServiceRequest = 5,
+	SshMsgServiceAccept = 6,
+	SshMsgKexinit = 20,
+	SshMsgNewkeys = 21,
+	SshMsgKexdhInit = 30,
+	SshMsgKexdhReply = 31,
+	
+	SshMsgUndefined,
+}
+
+
 //may leave \r at the end to be removed
 named!(pub ssh_parse_line<&[u8], &[u8]>,
     terminated!(
@@ -60,11 +78,12 @@ named!(pub ssh_parse_banner<SshBanner>,
     )
 );
 
-#[derive(PartialEq)]
+//#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct SshRecordHeader {
     pub pkt_len: u32,
     padding_len: u8,
-    pub msg_code: u8,
+    pub msg_code: MessageCode,
 }
 
 named!(pub ssh_parse_record_header<SshRecordHeader>,
@@ -72,7 +91,9 @@ named!(pub ssh_parse_record_header<SshRecordHeader>,
         pkt_len: verify!(be_u32, |val:u32| val > 1) >>
         padding_len: be_u8 >>
         msg_code: be_u8 >>
-        (SshRecordHeader{pkt_len, padding_len, msg_code})
+        (SshRecordHeader{pkt_len: pkt_len,
+        		padding_len: padding_len,
+        		msg_code: num::FromPrimitive::from_u8(msg_code).unwrap_or(MessageCode::SshMsgUndefined)})
     )
 );
 
@@ -83,9 +104,66 @@ named!(pub ssh_parse_record<SshRecordHeader>,
         padding_len: be_u8 >>
         msg_code: be_u8 >>
         take!((pkt_len-2) as usize) >>
-        (SshRecordHeader{pkt_len, padding_len, msg_code})
+        (SshRecordHeader{pkt_len: pkt_len,
+        		 padding_len: padding_len, 
+        		 msg_code: num::FromPrimitive::from_u8(msg_code).unwrap_or(MessageCode::SshMsgUndefined)})
     )
 );
+
+
+
+#[derive(Debug,PartialEq)]
+pub struct SshPacketKeyExchange<'a> {
+    pub cookie: &'a[u8],
+    pub kex_algs: &'a [u8],
+    pub server_host_key_algs: &'a [u8],
+    pub encr_algs_client_to_server: &'a [u8],
+    pub encr_algs_server_to_client: &'a [u8],
+    pub mac_algs_client_to_server: &'a [u8],
+    pub mac_algs_server_to_client: &'a [u8],
+    pub comp_algs_client_to_server: &'a [u8],
+    pub comp_algs_server_to_client: &'a [u8],
+    pub langs_client_to_server: &'a [u8],
+    pub langs_server_to_client: &'a [u8],
+    pub first_kex_packet_follows: u8,
+}
+
+
+named!(parse_string<&[u8]>, do_parse!(
+    len: be_u32 >>
+    string: take!(len) >>
+    ( string )
+));
+
+named!(pub parse_packet_key_exchange<SshPacketKeyExchange>, do_parse!(
+    cookie: take!(16) >>
+    kex_algs: parse_string >>
+    server_host_key_algs: parse_string >>
+    encr_algs_client_to_server: parse_string >>
+    encr_algs_server_to_client: parse_string >>
+    mac_algs_client_to_server: parse_string >>
+    mac_algs_server_to_client: parse_string >>
+    comp_algs_client_to_server: parse_string >>
+    comp_algs_server_to_client: parse_string >>
+    langs_client_to_server: parse_string >>
+    langs_server_to_client: parse_string >>
+    first_kex_packet_follows: be_u8 >>
+    be_u32 >>
+    ( SshPacketKeyExchange {
+        cookie: cookie,
+        kex_algs: kex_algs,
+        server_host_key_algs: server_host_key_algs,
+        encr_algs_client_to_server: encr_algs_client_to_server,
+        encr_algs_server_to_client: encr_algs_server_to_client,
+        mac_algs_client_to_server: mac_algs_client_to_server,
+        mac_algs_server_to_client: mac_algs_server_to_client,
+        comp_algs_client_to_server: comp_algs_client_to_server,
+        comp_algs_server_to_client: comp_algs_server_to_client,
+        langs_client_to_server: langs_client_to_server,
+        langs_server_to_client: langs_server_to_client,
+        first_kex_packet_follows: first_kex_packet_follows,
+    } )
+));
 
 #[cfg(test)]
 mod tests {

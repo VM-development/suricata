@@ -24,6 +24,8 @@ use crate::parser::*;
 use std;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
+use md5::compute;
+
 
 static mut ALPROTO_SSH: AppProto = ALPROTO_UNKNOWN;
 
@@ -61,9 +63,9 @@ bitflags! {
 
 const SSH_MAX_BANNER_LEN: usize = 256;
 const SSH_RECORD_HEADER_LEN: usize = 6;
-//TODO complete enum and parse messages contents
-const SSH_MSG_NEWKEYS: u8 = 21;
+const SSH_HASSH_STRING_DELIMITER: u8 = ';' as u8;
 
+#[derive(Debug)]
 pub struct SshHeader {
     record_left: u32,
     record_buf: Vec<u8>,
@@ -72,6 +74,9 @@ pub struct SshHeader {
     //can we have these be references to banner ?
     pub protover: Vec<u8>,
     pub swver: Vec<u8>,
+    
+    pub hassh: Vec<u8>,
+    pub hassh_string: Vec<u8>,
 }
 
 impl SshHeader {
@@ -83,6 +88,8 @@ impl SshHeader {
             banner: Vec::with_capacity(SSH_MAX_BANNER_LEN),
             protover: Vec::new(),
             swver: Vec::new(),
+            hassh: Vec::new(),
+            hassh_string: Vec::new(),
         }
     }
 }
@@ -140,6 +147,45 @@ impl SSHState {
         let ev = event as u8;
         core::sc_app_layer_decoder_events_set_event_raw(&mut self.transaction.events, ev);
     }
+    
+    fn process_message_code(hdr: &mut SshHeader, head: parser::SshRecordHeader, input: &[u8], resp: bool) {
+    	match head.msg_code {
+    		parser::MessageCode::SshMsgKexinit => {
+    			
+    			match parser::parse_packet_key_exchange(&input[SSH_RECORD_HEADER_LEN..]) {
+    				Ok((_, key_exchange)) => {
+    					if resp {
+    						hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_server_to_client);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_server_to_client);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_server_to_client);
+    					}
+    					else {
+    						hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_client_to_server);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_client_to_server);
+    						hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
+    						hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_client_to_server);
+    					}
+    					
+    					hdr.hassh.extend(format!("{:x?}", compute(&hdr.hassh_string)).as_bytes());
+    				}
+    				Err(_) => {
+    					// self.set_event(SSHEvent::InvalidRecord);
+    				}
+    			}
+    		}
+    		parser::MessageCode::SshMsgNewkeys => {
+    			hdr.flags = SSHTxFlag::SSH_FLAG_PARSER_DONE;
+    		}
+            _ => { }
+    	}
+    }
 
     fn parse_record(&mut self, mut input: &[u8], resp: bool) -> bool {
         //TODO add SCLogDebug ?
@@ -170,15 +216,14 @@ impl SSHState {
                 input = &input[needed..];
             }
         }
+        
         // Should we make the code with less duplicates ?
         if hdr.record_buf.len() > 0 {
             //parse header out of completed record_buf
             match parser::ssh_parse_record_header(&hdr.record_buf) {
                 Ok((_, head)) => {
-                    hdr.record_left = head.pkt_len - 2;
-                    if head.msg_code == SSH_MSG_NEWKEYS {
-                        hdr.flags = SSHTxFlag::SSH_FLAG_PARSER_DONE;
-                    }
+                	hdr.record_left = head.pkt_len - 2;
+                    SSHState::process_message_code(hdr, head, input, resp);
                     //header with input as maybe incomplete data
                 }
                 Err(_) => {
@@ -196,18 +241,19 @@ impl SSHState {
                 } else {
                     let start = hdr.record_left as usize;
                     input = &input[start..];
+
                     hdr.record_left = 0;
                 }
             }
         }
+        
         //parse records out of input
         while input.len() > 0 {
+        	
             match parser::ssh_parse_record(input) {
                 Ok((rem, head)) => {
+                    SSHState::process_message_code(hdr, head, input, resp);
                     input = rem;
-                    if head.msg_code == SSH_MSG_NEWKEYS {
-                        hdr.flags = SSHTxFlag::SSH_FLAG_PARSER_DONE;
-                    }
                     //header and complete data (not returned)
                 }
                 Err(nom::Err::Incomplete(_)) => {
@@ -216,9 +262,7 @@ impl SSHState {
                             let remlen = rem.len() as u32;
                             hdr.record_left = head.pkt_len - 2 - remlen;
                             //header with rem as incomplete data
-                            if head.msg_code == SSH_MSG_NEWKEYS {
-                                hdr.flags = SSHTxFlag::SSH_FLAG_PARSER_DONE;
-                            }
+                            SSHState::process_message_code(hdr, head, input, resp);
                             return true;
                         }
                         Err(nom::Err::Incomplete(_)) => {
