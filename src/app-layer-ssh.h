@@ -53,7 +53,8 @@ enum {
     SSH_STATE_BANNER_DONE,
     SSH_STATE_FINISHED,
 };
-
+void SSHEnableHassh(void);
+bool SSHHasshIsEnabled(void);
 void RegisterSSHParsers(void);
 void SSHParserRegisterTests(void);
 

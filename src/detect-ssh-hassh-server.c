@@ -84,6 +84,17 @@ static InspectionBuffer *GetSshData(DetectEngineThreadCtx *det_ctx,
     return buffer;
 }
 
+/**
+ * \brief this function setup the hasshServer modifier keyword used in the rule
+ *
+ * \param de_ctx Pointer to the Detection Engine Context
+ * \param s      Pointer to the Signature to which the current keyword belongs
+ * \param str    Should hold an empty string always
+ *
+ * \retval 0  On success
+ * \retval -1 On failure
+ * \retval -2 on failure that should be silent after the first
+ */
 static int DetectSshHasshServerSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
     if (DetectBufferSetActiveList(s, g_ssh_hassh_buffer_id) < 0)
@@ -91,11 +102,11 @@ static int DetectSshHasshServerSetup(DetectEngineCtx *de_ctx, Signature *s, cons
 
     if (DetectSignatureSetAppProto(s, ALPROTO_SSH) < 0)
         return -1;
-        
-    /* try to enable JA3 */
-    // SSLEnableHassh();
+            
+    /* try to enable Hassh */
+    SSHEnableHassh();
 
-    /* Check if JA3 is disabled */
+    /* Check if Hassh is disabled */
     /*if (!RunmodeIsUnittests() && HasshIsDisabled("rule")) {
         if (!SigMatchSilentErrorEnabled(de_ctx, DETECT_AL_TLS_JA3S_HASH)) {
             SCLogError(SC_WARN_JA3_DISABLED, "ja3(s) support is not enabled");
@@ -188,7 +199,7 @@ static void DetectSshHasshServerHashSetupCallback(const DetectEngineCtx *de_ctx,
 }
 
 /**
- * \brief Registration function for hassh keyword.
+ * \brief Registration function for hasshServer keyword.
  */
 void DetectSshHasshServerRegister(void) 
 {

@@ -151,7 +151,7 @@ impl SSHState {
     
     fn process_message_code(hdr: &mut SshHeader, head: parser::SshRecordHeader, input: &[u8], resp: &bool) {
     	match head.msg_code {
-    		parser::MessageCode::SshMsgKexinit => {
+    		parser::MessageCode::SshMsgKexinit if unsafe {SSHHasshIsEnabled()} => {
     			match parser::parse_packet_key_exchange(&input[SSH_RECORD_HEADER_LEN..]) {
     				Ok((_, key_exchange)) => {
                         // slices needed to generate hasshServer hash (if resp)
@@ -175,7 +175,7 @@ impl SSHState {
                         hdr.hassh.extend(format!("{:x?}", compute(&hdr.hassh_string)).as_bytes());
                     }
     				Err(_) => {
-    					// self.set_event(SSHEvent::InvalidRecord);
+    					// self.set_event(SSHEvent::InvalidKeyExchangeRecord);
     				}
     			}
     		}
