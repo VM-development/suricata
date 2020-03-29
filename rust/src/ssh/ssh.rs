@@ -28,6 +28,7 @@ use md5::compute;
 
 
 static mut ALPROTO_SSH: AppProto = ALPROTO_UNKNOWN;
+static mut HASSH_ENABLED: bool = false;
 
 #[repr(u32)]
 pub enum SSHEvent {
@@ -63,7 +64,7 @@ bitflags! {
 
 const SSH_MAX_BANNER_LEN: usize = 256;
 const SSH_RECORD_HEADER_LEN: usize = 6;
-const SSH_HASSH_STRING_DELIMITER: u8 = ';' as u8;
+const SSH_HASSH_STRING_DELIMITER_SLICE: [u8; 1] = [b';'];
 
 #[derive(Debug)]
 pub struct SshHeader {
@@ -148,29 +149,28 @@ impl SSHState {
         core::sc_app_layer_decoder_events_set_event_raw(&mut self.transaction.events, ev);
     }
     
-    fn process_message_code(hdr: &mut SshHeader, head: parser::SshRecordHeader, input: &[u8], resp: bool) {
+    fn process_message_code(hdr: &mut SshHeader, head: parser::SshRecordHeader, input: &[u8], resp: &bool) {
     	match head.msg_code {
     		parser::MessageCode::SshMsgKexinit => {
-    			
     			match parser::parse_packet_key_exchange(&input[SSH_RECORD_HEADER_LEN..]) {
     				Ok((_, key_exchange)) => {
-                        if resp {
-                            hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_server_to_client);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_server_to_client);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_server_to_client);
-                        } else {
-                            hdr.hassh_string.extend_from_slice(key_exchange.kex_algs);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.encr_algs_client_to_server);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.mac_algs_client_to_server);
-                            hdr.hassh_string.push(SSH_HASSH_STRING_DELIMITER);
-                            hdr.hassh_string.extend_from_slice(key_exchange.comp_algs_client_to_server);
-                        }
+                        // slices needed to generate hasshServer hash (if resp)
+                        // hassh (if !resp)
+                        let slices = if *resp {
+                            [key_exchange.kex_algs, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.encr_algs_server_to_client, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.mac_algs_server_to_client, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.comp_algs_server_to_client]}
+                        else {
+                            [key_exchange.kex_algs, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.encr_algs_client_to_server, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.mac_algs_client_to_server, &SSH_HASSH_STRING_DELIMITER_SLICE,
+                             key_exchange.comp_algs_client_to_server]
+                        };
+                        // reserving memory
+                        hdr.hassh_string.reserve_exact(slices.iter().fold(0, |acc, x| acc + x.len()));
+                        // copying slices to hassh string
+                        slices.iter().for_each(|&x| hdr.hassh_string.extend_from_slice(x)); 
                         // hdr.hassh.extend_from_slice(compute(&hdr.hassh_string).0);
                         hdr.hassh.extend(format!("{:x?}", compute(&hdr.hassh_string)).as_bytes());
                     }
@@ -222,7 +222,7 @@ impl SSHState {
             match parser::ssh_parse_record_header(&hdr.record_buf) {
                 Ok((_, head)) => {
                 	hdr.record_left = head.pkt_len - 2;
-                    SSHState::process_message_code(hdr, head, input, resp);
+                    SSHState::process_message_code(hdr, head, input, &resp);
                     //header with input as maybe incomplete data
                 }
                 Err(_) => {
@@ -251,7 +251,7 @@ impl SSHState {
         	
             match parser::ssh_parse_record(input) {
                 Ok((rem, head)) => {
-                    SSHState::process_message_code(hdr, head, input, resp);
+                    SSHState::process_message_code(hdr, head, input, &resp);
                     input = rem;
                     //header and complete data (not returned)
                 }
@@ -261,7 +261,7 @@ impl SSHState {
                             let remlen = rem.len() as u32;
                             hdr.record_left = head.pkt_len - 2 - remlen;
                             //header with rem as incomplete data
-                            SSHState::process_message_code(hdr, head, input, resp);
+                            SSHState::process_message_code(hdr, head, input, &resp);
                             return true;
                         }
                         Err(nom::Err::Incomplete(_)) => {
@@ -562,6 +562,12 @@ pub extern "C" fn rs_ssh_tx_get_flags(
         return tx.srv_hdr.flags.bits() as i32;
     }
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_ssh_tx_get_hassh_enabled() -> std::os::raw::c_int {
+    return if HASSH_ENABLED { 1 as i32} else { 0 as i32 };
+}
+
 
 #[no_mangle]
 pub extern "C" fn rs_ssh_tx_get_alstate_progress(

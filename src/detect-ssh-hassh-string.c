@@ -54,7 +54,7 @@
 #define KEYWORD_DOC "ssh-keywords.html#hassh"
 #define BUFFER_NAME "hassh.string"
 #define BUFFER_DESC "Ssh Client Key Exchange methods For ssh Clients "
-static int g_ssh_hassh_buffer_id = 0;
+static int g_ssh_hassh_string_buffer_id = 0;
 
 
 static InspectionBuffer *GetSshData(DetectEngineThreadCtx *det_ctx,
@@ -86,7 +86,7 @@ static InspectionBuffer *GetSshData(DetectEngineThreadCtx *det_ctx,
 
 static int DetectSshHasshStringSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
-    if (DetectBufferSetActiveList(s, g_ssh_hassh_buffer_id) < 0)
+    if (DetectBufferSetActiveList(s, g_ssh_hassh_string_buffer_id) < 0)
         return -1;
 
     if (DetectSignatureSetAppProto(s, ALPROTO_SSH) < 0)
@@ -129,5 +129,5 @@ void DetectSshHasshStringRegister(void)
 
     DetectBufferTypeSetDescriptionByName(BUFFER_NAME, BUFFER_DESC);
 
-    g_ssh_hassh_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);
+    g_ssh_hassh_string_buffer_id = DetectBufferTypeGetByName(BUFFER_NAME);
 }
