@@ -36,6 +36,18 @@ fn log_ssh(tx: &SSHTransaction) -> Option<Json> {
                 std::str::from_utf8(&tx.cli_hdr.swver).unwrap(),
             );
         }
+        if tx.cli_hdr.hassh.len() > 0 {
+            cjs.set_string(
+                "hassh",
+                std::str::from_utf8(&tx.cli_hdr.hassh).unwrap()
+            );
+        }
+        if tx.cli_hdr.hassh_string.len() > 0 {
+            cjs.set_string(
+                "hassh_string",
+                std::str::from_utf8(&tx.cli_hdr.hassh_string).unwrap()
+            );
+        }
         js.set("client", cjs);
     }
     if tx.srv_hdr.protover.len() > 0 {
@@ -48,6 +60,18 @@ fn log_ssh(tx: &SSHTransaction) -> Option<Json> {
             sjs.set_string(
                 "software_version",
                 std::str::from_utf8(&tx.srv_hdr.swver).unwrap(),
+            );
+        }
+        if tx.srv_hdr.hassh.len() > 0 {
+            sjs.set_string(
+                "hasshServer",
+                std::str::from_utf8(&tx.srv_hdr.hassh).unwrap()
+            );
+        }
+        if tx.srv_hdr.hassh_string.len() > 0 {
+            sjs.set_string(
+                "hasshServer_string",
+                std::str::from_utf8(&tx.srv_hdr.hassh_string).unwrap()
             );
         }
         js.set("server", sjs);
