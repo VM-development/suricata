@@ -37,7 +37,7 @@
 #include "flow.h"
 #include "flow-var.h"
 #include "flow-util.h"
-
+#include "stream-tcp.h"
 #include "util-debug.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
@@ -168,35 +168,16 @@ static void DetectSshHasshServerHashSetupCallback(const DetectEngineCtx *de_ctx,
                 cd->content[u] = tolower(cd->content[u]);
             }
         }
-        /*uint8_t new_hassh[cd->content_len / 2];
-        int new_hassh_len = 0;
-
-        for (u = 0; u < cd->content_len; u+=2)
-        {
-        	if (cd->content[u] > '9')
-        		new_hassh[new_hassh_len] = ((tolower((char)cd->content[u]) - 'a') + 10) << 4;
-        	else
-        		new_hassh[new_hassh_len] = ((char)cd->content[u] - '0') << 4;
-
-        	if (cd->content[u + 1] > '9')
-        		new_hassh[new_hassh_len] |= tolower((char)cd->content[u + 1]) - 'a' + 10;
-        	else
-        		new_hassh[new_hassh_len] |= (char)cd->content[u + 1] - '0';
-        	new_hassh_len++;
-        }
-        int i;
-        for (i=0; i<new_hassh_len; i++)
-        {
-        	printf("%02x",(char)new_hassh[i]);
-        }
-        printf("\n");
-*/
 
         SpmDestroyCtx(cd->spm_ctx);
         cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1,
         		de_ctx->spm_global_thread_ctx);
     }
 }
+
+#ifdef UNITTESTS
+#include "tests/detect-ssh-hassh-server.c"
+#endif
 
 /**
  * \brief Registration function for hasshServer keyword.
@@ -207,7 +188,7 @@ void DetectSshHasshServerRegister(void)
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].alias = KEYWORD_NAME_LEGACY;
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].desc = BUFFER_NAME " sticky buffer";
 #ifdef UNITTESTS
-    //sigmatch_table[DETECT_AL_SNMP_COMMUNITY].RegisterTests = DetectSshHasshRegisterTests;
+    sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].RegisterTests = DetectSshHasshServerRegisterTests;
 #endif
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].url = DOC_URL DOC_VERSION "/rules/" KEYWORD_DOC;
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER].Setup = DetectSshHasshServerSetup;

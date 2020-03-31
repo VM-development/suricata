@@ -41,7 +41,7 @@
 #include "util-debug.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
-
+#include "stream-tcp.h"
 #include "app-layer.h"
 #include "app-layer-parser.h"
 #include "app-layer-ssh.h"
@@ -168,35 +168,17 @@ static void DetectSshHasshHashSetupCallback(const DetectEngineCtx *de_ctx,
                 cd->content[u] = tolower(cd->content[u]);
             }
         }
-        /*uint8_t new_hassh[cd->content_len / 2];
-        int new_hassh_len = 0;
-
-        for (u = 0; u < cd->content_len; u+=2)
-        {
-        	if (cd->content[u] > '9')
-        		new_hassh[new_hassh_len] = ((tolower((char)cd->content[u]) - 'a') + 10) << 4;
-        	else
-        		new_hassh[new_hassh_len] = ((char)cd->content[u] - '0') << 4;
-
-        	if (cd->content[u + 1] > '9')
-        		new_hassh[new_hassh_len] |= tolower((char)cd->content[u + 1]) - 'a' + 10;
-        	else
-        		new_hassh[new_hassh_len] |= (char)cd->content[u + 1] - '0';
-        	new_hassh_len++;
-        }
-        int i;
-        for (i=0; i<new_hassh_len; i++)
-        {
-        	printf("%02x",(char)new_hassh[i]);
-        }
-        printf("\n");
-*/
 
         SpmDestroyCtx(cd->spm_ctx);
         cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1,
         		de_ctx->spm_global_thread_ctx);
     }
 }
+
+
+#ifdef UNITTESTS
+#include "tests/detect-ssh-hassh.c"
+#endif
 
 /**
  * \brief Registration function for hassh keyword.
@@ -207,7 +189,7 @@ void DetectSshHasshRegister(void)
     sigmatch_table[DETECT_AL_SSH_HASSH].alias = KEYWORD_NAME_LEGACY;
     sigmatch_table[DETECT_AL_SSH_HASSH].desc = BUFFER_NAME " sticky buffer";
 #ifdef UNITTESTS
-    //sigmatch_table[DETECT_AL_SNMP_COMMUNITY].RegisterTests = DetectSshHasshRegisterTests;
+    sigmatch_table[DETECT_AL_SSH_HASSH].RegisterTests = DetectSshHasshRegisterTests;
 #endif
     sigmatch_table[DETECT_AL_SSH_HASSH].url = DOC_URL DOC_VERSION "/rules/" KEYWORD_DOC;
     sigmatch_table[DETECT_AL_SSH_HASSH].Setup = DetectSshHasshSetup;
@@ -223,3 +205,4 @@ void DetectSshHasshRegister(void)
     DetectBufferTypeRegisterSetupCallback(BUFFER_NAME, DetectSshHasshHashSetupCallback);
     DetectBufferTypeRegisterValidateCallback(BUFFER_NAME, DetectSshHasshHashValidateCallback);
 }
+

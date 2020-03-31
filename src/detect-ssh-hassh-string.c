@@ -41,7 +41,7 @@
 #include "util-debug.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
-
+#include "stream-tcp.h"
 #include "app-layer.h"
 #include "app-layer-parser.h"
 #include "app-layer-ssh.h"
@@ -118,6 +118,9 @@ static int DetectSshHasshStringSetup(DetectEngineCtx *de_ctx, Signature *s, cons
 
 }
 
+#ifdef UNITTESTS
+#include "tests/detect-ssh-hassh-string.c"
+#endif
 
 /**
  * \brief Registration function for hassh.string keyword.
@@ -128,7 +131,7 @@ void DetectSshHasshStringRegister(void)
     sigmatch_table[DETECT_AL_SSH_HASSH_STRING].alias = KEYWORD_ALIAS;
     sigmatch_table[DETECT_AL_SSH_HASSH_STRING].desc = BUFFER_NAME " sticky buffer";
 #ifdef UNITTESTS
-    //sigmatch_table[DETECT_AL_SNMP_COMMUNITY].RegisterTests = DetectSshHasshRegisterTests;
+    sigmatch_table[DETECT_AL_SSH_HASSH_STRING].RegisterTests = DetectSshHasshStringRegisterTests;
 #endif
     sigmatch_table[DETECT_AL_SSH_HASSH_STRING].url = DOC_URL DOC_VERSION "/rules/" KEYWORD_DOC;
     sigmatch_table[DETECT_AL_SSH_HASSH_STRING].Setup = DetectSshHasshStringSetup;

@@ -37,7 +37,7 @@
 #include "flow.h"
 #include "flow-var.h"
 #include "flow-util.h"
-
+#include "stream-tcp.h"
 #include "util-debug.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
@@ -95,7 +95,7 @@ static InspectionBuffer *GetSshData(DetectEngineThreadCtx *det_ctx,
  * \retval -1 On failure
  * \retval -2 on failure that should be silent after the first
  */
-static int DetectSshHasshStringSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
+static int DetectSshHasshServerStringSetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
     if (DetectBufferSetActiveList(s, g_ssh_hassh_server_string_buffer_id) < 0)
         return -1;
@@ -119,6 +119,10 @@ static int DetectSshHasshStringSetup(DetectEngineCtx *de_ctx, Signature *s, cons
 }
 
 
+#ifdef UNITTESTS
+#include "tests/detect-ssh-hassh-server-string.c"
+#endif
+
 /**
  * \brief Registration function for hasshServer.string keyword.
  */
@@ -128,10 +132,10 @@ void DetectSshHasshServerStringRegister(void)
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].alias = KEYWORD_ALIAS;
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].desc = BUFFER_NAME " sticky buffer";
 #ifdef UNITTESTS
-    //sigmatch_table[DETECT_AL_SNMP_COMMUNITY].RegisterTests = DetectSshHasshRegisterTests;
+    sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].RegisterTests = DetectSshHasshServerStringRegisterTests;
 #endif
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].url = DOC_URL DOC_VERSION "/rules/" KEYWORD_DOC;
-    sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].Setup = DetectSshHasshStringSetup;
+    sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].Setup = DetectSshHasshServerStringSetup;
     sigmatch_table[DETECT_AL_SSH_HASSH_SERVER_STRING].flags |= SIGMATCH_INFO_STICKY_BUFFER | SIGMATCH_NOOPT;
 
 

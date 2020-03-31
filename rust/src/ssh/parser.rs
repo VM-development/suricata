@@ -36,7 +36,7 @@ pub enum MessageCode {
 	SshMsgServiceRequest = 5,
 	SshMsgServiceAccept = 6,
 	SshMsgKexinit = 20,
-	SshMsgNewkeys = 21,
+	SshMsgNewKeys = 21,
 	SshMsgKexdhInit = 30,
 	SshMsgKexdhReply = 31,
 	
@@ -128,6 +128,31 @@ pub struct SshPacketKeyExchange<'a> {
     pub first_kex_packet_follows: u8,
 }
 
+use md5::compute;
+
+const SSH_HASSH_STRING_DELIMITER_SLICE: [u8; 1] = [b';'];
+
+impl<'a> SshPacketKeyExchange<'a> {
+    pub fn generate_hassh(&self, hassh_string: &mut Vec<u8>, hassh: &mut Vec<u8>, to_server: &bool) {
+        let slices = if *to_server { 
+            [self.kex_algs, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.encr_algs_server_to_client, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.mac_algs_server_to_client, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.comp_algs_server_to_client]}
+        else {
+            [self.kex_algs, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.encr_algs_client_to_server, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.mac_algs_client_to_server, &SSH_HASSH_STRING_DELIMITER_SLICE,
+             self.comp_algs_client_to_server]
+        };
+        // reserving memory
+        hassh_string.reserve_exact(slices.iter().fold(0, |acc, x| acc + x.len()));
+        // copying slices to hassh string
+        slices.iter().for_each(|&x| hassh_string.extend_from_slice(x)); 
+        // hdr.hassh.extend_from_slice(compute(&hdr.hassh_string).0);
+        hassh.extend(format!("{:x?}", compute(&hassh_string)).as_bytes());
+    }
+}
 
 named!(parse_string<&[u8]>, do_parse!(
     len: be_u32 >>
@@ -169,6 +194,7 @@ named!(pub parse_packet_key_exchange<SshPacketKeyExchange>, do_parse!(
 mod tests {
 
     use super::*;
+    use md5::compute;
 
     /// Simple test of some valid data.
     #[test]
@@ -262,4 +288,73 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_parse_key_exchange() {
+        let client_key_exchange: &'static [u8] = include_bytes!("client_init.raw");
+        let cookie = [0x18, 0x70, 0xcb, 0xa4, 0xa3, 0xd4, 0xdc, 0x88, 0x6f, 0xfd, 0x76, 0x06, 0xcf, 0x36, 0x1b, 0xc6];
+        let key_exchange = SshPacketKeyExchange {
+            cookie: &cookie,
+            kex_algs: b"curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,ext-info-c",
+            server_host_key_algs: b"ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+            encr_algs_client_to_server: b"chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com",
+            encr_algs_server_to_client: b"chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com",
+            mac_algs_client_to_server: b"umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1",
+            mac_algs_server_to_client: b"umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1",
+            comp_algs_client_to_server: b"none,zlib@openssh.com,zlib",
+            comp_algs_server_to_client: b"none,zlib@openssh.com,zlib",
+            langs_client_to_server: b"",
+            langs_server_to_client: b"",
+            first_kex_packet_follows: 0,
+        };
+
+        let expected = Ok((b"" as &[u8], key_exchange));
+        let res = parse_packet_key_exchange(&client_key_exchange);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_parse_hassh() {
+        let client_key_exchange: &'static [u8] = include_bytes!("client_init.raw");
+        println!("print {:?}", &client_key_exchange);
+        let mut hassh_string: Vec<u8> = vec!();
+        let mut hassh: Vec<u8> = vec!();
+        match parse_packet_key_exchange(&client_key_exchange){
+            Ok((_, key_exchange)) => { key_exchange.generate_hassh(&mut hassh_string, &mut hassh, &true); }
+            Err(_) => { }
+        }
+
+        assert_eq!(hassh_string,    "curve25519-sha256,curve25519-sha256@libssh.org,\
+                                    ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,\
+                                    diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,\
+                                    diffie-hellman-group14-sha1,ext-info-c;chacha20-poly1305@openssh.com,aes128-ctr,\
+                                    aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com;umac-64-etm@openssh.com,\
+                                    umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,\
+                                    hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,\
+                                    hmac-sha2-256,hmac-sha2-512,hmac-sha1;none,zlib@openssh.com,zlib".as_bytes().to_vec());
+        assert_eq!(hassh, "ec7378c1a92f5a8dde7e8b7a1ddf33d1".as_bytes().to_vec());
+    }
+
+    #[test]
+    fn test_parse_hassh_server() {
+        let client_key_exchange:  &'static [u8] = include_bytes!("server_init.raw");
+        let mut hassh_server_string: Vec<u8> = vec!();
+        let mut hassh_server: Vec<u8> = vec!();
+        match parse_packet_key_exchange(&client_key_exchange){
+            Ok((_, key_exchange)) => { key_exchange.generate_hassh(&mut hassh_server_string, &mut hassh_server, &true); }
+            Err(_) => { }
+        }
+
+        assert_eq!(hassh_server_string, "curve25519-sha256,curve25519-sha256@libssh.org,\
+                                        ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,\
+                                        diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,\
+                                        diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,\
+                                        diffie-hellman-group14-sha1;chacha20-poly1305@openssh.com,\
+                                        aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,\
+                                        aes256-gcm@openssh.com;umac-64-etm@openssh.com,\
+                                        umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,\
+                                        hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,\
+                                        umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,\
+                                        hmac-sha2-512,hmac-sha1;none,zlib@openssh.com".as_bytes().to_vec());
+        assert_eq!(hassh_server, "b12d2871a1189eff20364cf5333619ee".as_bytes().to_vec());
+    }
 }
