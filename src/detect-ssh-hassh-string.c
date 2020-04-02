@@ -107,12 +107,12 @@ static int DetectSshHasshStringSetup(DetectEngineCtx *de_ctx, Signature *s, cons
     SSHEnableHassh();
 
     /* Check if Hassh is disabled */
-    /*if (!RunmodeIsUnittests() && HasshIsDisabled("rule")) {
-        if (!SigMatchSilentErrorEnabled(de_ctx, DETECT_AL_TLS_JA3S_HASH)) {
-            SCLogError(SC_WARN_JA3_DISABLED, "ja3(s) support is not enabled");
+    if (!RunmodeIsUnittests() && !SSHHasshIsEnabled()) {
+        if (!SigMatchSilentErrorEnabled(de_ctx, DETECT_AL_SSH_HASSH_STRING)) {
+            SCLogError(SC_WARN_HASSH_DISABLED, "hassh support is not enabled");
         }
         return -2;
-    }*/
+    }
 
     return 0;
 
